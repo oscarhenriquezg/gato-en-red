@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"strconv"
 	"time"
 )
 
@@ -27,26 +28,65 @@ func getComputerMove(board [3][3]string) (int, int) {
 }
 
 func main() {
-	serverSocket, err := net.Listen("tcp", ":12346")
+	listener, err := net.Listen("tcp", ":8001")
 	if err != nil {
 		fmt.Println("[OPPONENT] Error al iniciar el servidor:", err)
 		return
 	}
-	defer serverSocket.Close()
-	fmt.Println("[OPPONENT] Servidor oponente escuchando en localhost:12346")
+	defer listener.Close()
+	fmt.Println("[OPPONENT] Servidor oponente escuchando en localhost:8001")
 
 	for {
-		conn, err := serverSocket.Accept()
+		conn, err := listener.Accept()
 		if err != nil {
 			fmt.Println("[OPPONENT] Error al aceptar conexión:", err)
 			continue
 		}
 		fmt.Printf("[OPPONENT] Conectado con %s\n", conn.RemoteAddr().String())
-		handleConnection(conn)
+		go handleInitialConnection(conn)
 	}
 }
 
-func handleConnection(conn net.Conn) {
+func handleInitialConnection(conn net.Conn) {
+	defer conn.Close()
+	scanner := bufio.NewScanner(conn)
+	if scanner.Scan() {
+		message := scanner.Text()
+		fmt.Printf("[OPPONENT] Recibido mensaje: %s\n", message)
+
+		if message == "Conexion Inicial" {
+			// Seleccionar un puerto aleatorio para la conexión de juego
+			rand.Seed(time.Now().UnixNano())
+			newPort := rand.Intn(65535-8002) + 8002
+
+			// Enviar el puerto aleatorio al intermediario
+			response := fmt.Sprintf("Conexion Establecida:%d", newPort)
+			conn.Write([]byte(response + "\n"))
+			fmt.Printf("[OPPONENT] Enviando respuesta: %s\n", response)
+
+			// Configurar un nuevo listener en el puerto aleatorio
+			newListener, err := net.Listen("tcp", ":"+strconv.Itoa(newPort))
+			if err != nil {
+				fmt.Println("[OPPONENT] Error al iniciar el listener en el nuevo puerto:", err)
+				return
+			}
+			defer newListener.Close()
+			fmt.Printf("[OPPONENT] Escuchando en el nuevo puerto: %d\n", newPort)
+
+			for {
+				newConn, err := newListener.Accept()
+				if err != nil {
+					fmt.Println("[OPPONENT] Error al aceptar conexión en el nuevo puerto:", err)
+					continue
+				}
+				fmt.Printf("[OPPONENT] Conectado en el nuevo puerto con %s\n", newConn.RemoteAddr().String())
+				handleGameConnection(newConn)
+			}
+		}
+	}
+}
+
+func handleGameConnection(conn net.Conn) {
 	defer conn.Close()
 	scanner := bufio.NewScanner(conn)
 	for scanner.Scan() {

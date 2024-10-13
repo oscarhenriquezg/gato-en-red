@@ -13,7 +13,7 @@ La siguiente implementación del ***juego del gato en línea ** utiliza los leng
 
 1) Ejecutar ***Servidor Oponente*** en una interfaz de línea de comandos:
 
-`go run server_oponent.go`
+`go run server_opponent.go`
 
 2) Ejecutar ***Servidor intermediario*** en otra interfaz de línea de comandos:
 

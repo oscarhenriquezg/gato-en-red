@@ -1,8 +1,9 @@
 import socket
 import threading
 import json
+import random
 
-def handle_client(client_socket, opponent_socket):
+def handle_client(client_socket, opponent_socket_addr):
     board = [[" " for _ in range(3)] for _ in range(3)]
     current_player = 'X'
 
@@ -21,6 +22,11 @@ def handle_client(client_socket, opponent_socket):
 
     def board_full(board):
         return all(cell != " " for row in board for cell in row)
+
+    # Conectar al servidor oponente en el nuevo puerto aleatorio
+    opponent_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    opponent_socket.connect(opponent_socket_addr)
+    print(f"[INTERMEDIARY] Conectado al servidor oponente en {opponent_socket_addr}")
 
     while True:
         # Enviar el tablero al jugador humano
@@ -85,10 +91,22 @@ if __name__ == "__main__":
         client_socket, addr = server_socket.accept()
         print(f"[INTERMEDIARY] Conectado con cliente {addr}")
 
-        opponent_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        opponent_socket.connect(('localhost', 12346))  # Conéctate al servidor oponente
-        print("[INTERMEDIARY] Conectado al servidor oponente en localhost:12346")
+        # Paso 1: Conectar al servidor oponente en el puerto 8001 y obtener el nuevo puerto
+        initial_opponent_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        initial_opponent_socket.connect(('localhost', 8001))
+        initial_opponent_socket.sendall("Conexion Inicial\n".encode())
+        response = initial_opponent_socket.recv(1024).decode().strip()
+        print(f"[INTERMEDIARY] Respuesta del servidor oponente: {response}")
+
+        if response.startswith("Conexion Establecida:"):
+            new_port = int(response.split(":")[1])
+            opponent_socket_addr = ('localhost', new_port)
+            initial_opponent_socket.close()
+        else:
+            print("[INTERMEDIARY] Error al establecer conexión con el servidor oponente")
+            client_socket.close()
+            continue
 
         client_handler = threading.Thread(
-            target=handle_client, args=(client_socket, opponent_socket))
+            target=handle_client, args=(client_socket, opponent_socket_addr))
         client_handler.start()
