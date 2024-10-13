@@ -18,11 +18,10 @@ def main():
     while True:
         while True:
             # Recibe el estado del juego
-            board = client_socket.recv(1024).decode()
+            board = client_socket.recv(1024).decode().strip()
             print(f"[CLIENT] Recibido del servidor: {board}")
 
             if board in ['Ganaste', 'Perdiste', 'Empate']:
-                print_board(last_board)
                 print(board)
                 break
 
