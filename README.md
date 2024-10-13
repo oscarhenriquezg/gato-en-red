@@ -12,12 +12,15 @@ La siguiente implementación del ***juego del gato en línea ** utiliza los leng
 ## Instrucciones de ejecución
 
 1) Ejecutar ***Servidor Oponente*** en una interfaz de línea de comandos:
+
 `go run server_oponent.go`
 
 2) Ejecutar ***Servidor intermediario*** en otra interfaz de línea de comandos:
+
 `python3 server_intermediary.py`
 
 3) Ejecutar ***Cliente*** en otra interfaz de línea de comandos:
+
 `python3 client.py`
 
 4) Seguir instrucciones en pantalla para jugar.
