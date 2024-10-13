@@ -1,14 +1,12 @@
 import socket
 import threading
 import json
-import random
 
 def handle_client(client_socket, opponent_socket_addr):
     board = [[" " for _ in range(3)] for _ in range(3)]
     current_player = 'X'
 
     def check_winner(board):
-        # Comprobar filas, columnas y diagonales
         for i in range(3):
             if board[i][0] == board[i][1] == board[i][2] != " ":
                 return True
@@ -23,9 +21,8 @@ def handle_client(client_socket, opponent_socket_addr):
     def board_full(board):
         return all(cell != " " for row in board for cell in row)
 
-    # Conectar al servidor oponente en el nuevo puerto aleatorio
-    opponent_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    opponent_socket.connect(opponent_socket_addr)
+    # Usar UDP para la comunicación con el servidor oponente
+    opponent_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     print(f"[INTERMEDIARY] Conectado al servidor oponente en {opponent_socket_addr}")
 
     while True:
@@ -45,39 +42,38 @@ def handle_client(client_socket, opponent_socket_addr):
         row, col = map(int, move.split())
         board[row][col] = 'X'
 
-        # Verificar si el jugador humano ha ganado
         if check_winner(board):
             client_socket.sendall("Ganaste\n".encode())
-            opponent_socket.sendall("Perdiste\n".encode())
+            opponent_socket.sendto("Perdiste\n".encode(), opponent_socket_addr)
             print("[INTERMEDIARY] El cliente ha ganado")
             break
         elif board_full(board):
             client_socket.sendall("Empate\n".encode())
-            opponent_socket.sendall("Empate\n".encode())
+            opponent_socket.sendto("Empate\n".encode(), opponent_socket_addr)
             print("[INTERMEDIARY] El juego terminó en empate")
             break
 
         # Cambiar turno al oponente
         board_json = json.dumps(board)
-        opponent_socket.sendall(board_json.encode() + b'\n')
+        opponent_socket.sendto(board_json.encode(), opponent_socket_addr)
         print(f"[INTERMEDIARY] Enviado tablero al oponente: {board}")
 
         # Recibir movimiento del oponente
-        move = opponent_socket.recv(1024).decode().strip()
+        move, _ = opponent_socket.recvfrom(1024)
+        move = move.decode().strip()
         print(f"[INTERMEDIARY] Recibido movimiento del oponente: {move}")
 
         row, col = map(int, move.split())
         board[row][col] = 'O'
 
-        # Verificar si la computadora ha ganado
         if check_winner(board):
             client_socket.sendall("Perdiste\n".encode())
-            opponent_socket.sendall("Ganaste\n".encode())
+            opponent_socket.sendto("Ganaste\n".encode(), opponent_socket_addr)
             print("[INTERMEDIARY] El oponente ha ganado")
             break
         elif board_full(board):
             client_socket.sendall("Empate\n".encode())
-            opponent_socket.sendall("Empate\n".encode())
+            opponent_socket.sendto("Empate\n".encode(), opponent_socket_addr)
             print("[INTERMEDIARY] El juego terminó en empate")
             break
 
@@ -91,7 +87,7 @@ if __name__ == "__main__":
         client_socket, addr = server_socket.accept()
         print(f"[INTERMEDIARY] Conectado con cliente {addr}")
 
-        # Paso 1: Conectar al servidor oponente en el puerto 8001 y obtener el nuevo puerto
+        # Conexión inicial con el servidor oponente para obtener el puerto dinámico
         initial_opponent_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         initial_opponent_socket.connect(('localhost', 8001))
         initial_opponent_socket.sendall("Conexion Inicial\n".encode())

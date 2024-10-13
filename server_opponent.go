@@ -1,123 +1,103 @@
 package main
 
 import (
-	"bufio"
-	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
-func getComputerMove(board [3][3]string) (int, int) {
-	availableMoves := []struct{ row, col int }{}
-	for i := 0; i < 3; i++ {
-		for j := 0; j < 3; j++ {
-			if board[i][j] == " " {
-				availableMoves = append(availableMoves, struct{ row, col int }{i, j})
-			}
-		}
-	}
-	if len(availableMoves) == 0 {
-		return -1, -1
-	}
-	rand.Seed(time.Now().UnixNano())
-	move := availableMoves[rand.Intn(len(availableMoves))]
-	return move.row, move.col
-}
-
 func main() {
-	listener, err := net.Listen("tcp", ":8001")
+	// Configuración inicial para escuchar conexiones TCP en el puerto 8001
+	tcpAddr, err := net.ResolveTCPAddr("tcp", "localhost:8001")
 	if err != nil {
-		fmt.Println("[OPPONENT] Error al iniciar el servidor:", err)
-		return
+		fmt.Println("Error al resolver la dirección TCP:", err)
+		os.Exit(1)
 	}
-	defer listener.Close()
-	fmt.Println("[OPPONENT] Servidor oponente escuchando en localhost:8001")
+
+	tcpListener, err := net.ListenTCP("tcp", tcpAddr)
+	if err != nil {
+		fmt.Println("Error al iniciar el listener TCP:", err)
+		os.Exit(1)
+	}
+	fmt.Println("[OPPONENT] Escuchando en puerto TCP 8001")
 
 	for {
-		conn, err := listener.Accept()
+		conn, err := tcpListener.Accept()
 		if err != nil {
-			fmt.Println("[OPPONENT] Error al aceptar conexión:", err)
-			continue
-		}
-		fmt.Printf("[OPPONENT] Conectado con %s\n", conn.RemoteAddr().String())
-		go handleInitialConnection(conn)
-	}
-}
-
-func handleInitialConnection(conn net.Conn) {
-	defer conn.Close()
-	scanner := bufio.NewScanner(conn)
-	if scanner.Scan() {
-		message := scanner.Text()
-		fmt.Printf("[OPPONENT] Recibido mensaje: %s\n", message)
-
-		if message == "Conexion Inicial" {
-			// Seleccionar un puerto aleatorio para la conexión de juego
-			rand.Seed(time.Now().UnixNano())
-			newPort := rand.Intn(65535-8002) + 8002
-
-			// Enviar el puerto aleatorio al intermediario
-			response := fmt.Sprintf("Conexion Establecida:%d", newPort)
-			conn.Write([]byte(response + "\n"))
-			fmt.Printf("[OPPONENT] Enviando respuesta: %s\n", response)
-
-			// Configurar un nuevo listener en el puerto aleatorio
-			newListener, err := net.Listen("tcp", ":"+strconv.Itoa(newPort))
-			if err != nil {
-				fmt.Println("[OPPONENT] Error al iniciar el listener en el nuevo puerto:", err)
-				return
-			}
-			defer newListener.Close()
-			fmt.Printf("[OPPONENT] Escuchando en el nuevo puerto: %d\n", newPort)
-
-			for {
-				newConn, err := newListener.Accept()
-				if err != nil {
-					fmt.Println("[OPPONENT] Error al aceptar conexión en el nuevo puerto:", err)
-					continue
-				}
-				fmt.Printf("[OPPONENT] Conectado en el nuevo puerto con %s\n", newConn.RemoteAddr().String())
-				handleGameConnection(newConn)
-			}
-		}
-	}
-}
-
-func handleGameConnection(conn net.Conn) {
-	defer conn.Close()
-	scanner := bufio.NewScanner(conn)
-	for scanner.Scan() {
-		boardStr := scanner.Text()
-		fmt.Printf("[OPPONENT] Recibido tablero: %s\n", boardStr)
-
-		if boardStr == "exit" {
-			fmt.Println("[OPPONENT] El servidor intermediario ha cerrado la conexión")
-			break
-		}
-
-		// Convertir el tablero de JSON a una matriz de 3x3
-		var board [3][3]string
-		err := json.Unmarshal([]byte(boardStr), &board)
-		if err != nil {
-			fmt.Println("[OPPONENT] Error al decodificar el tablero:", err)
+			fmt.Println("Error al aceptar conexión TCP:", err)
 			continue
 		}
 
-		// Elige el movimiento de la computadora
-		row, col := getComputerMove(board)
-		move := fmt.Sprintf("%d %d", row, col)
-		_, err = conn.Write([]byte(move + "\n"))
-		if err != nil {
-			fmt.Println("[OPPONENT] Error al enviar movimiento:", err)
-			break
-		}
-		fmt.Printf("[OPPONENT] Enviado movimiento: %s\n", move)
+		go handleTCPConnection(conn)
+	}
+}
+
+func handleTCPConnection(conn net.Conn) {
+	defer conn.Close()
+
+	// Generar un puerto aleatorio entre 8001 y 65535
+	rand.Seed(time.Now().UnixNano())
+	randomPort := rand.Intn(65535-8001) + 8001
+
+	// Enviar el puerto aleatorio al servidor intermediario
+	conn.Write([]byte("Conexion Establecida:" + strconv.Itoa(randomPort) + "\n"))
+
+	// Iniciar listener UDP en el puerto aleatorio generado
+	udpAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("localhost:%d", randomPort))
+	if err != nil {
+		fmt.Println("[OPPONENT] Error al resolver dirección UDP:", err)
+		return
 	}
 
-	if err := scanner.Err(); err != nil {
-		fmt.Println("[OPPONENT] Error en la conexión:", err)
+	udpConn, err := net.ListenUDP("udp", udpAddr)
+	if err != nil {
+		fmt.Println("[OPPONENT] Error al iniciar listener UDP:", err)
+		return
 	}
+	defer udpConn.Close()
+
+	fmt.Printf("[OPPONENT] Escuchando en puerto UDP %d\n", randomPort)
+
+	for {
+		handleUDPConnection(udpConn)
+	}
+}
+
+func handleUDPConnection(conn *net.UDPConn) {
+	buffer := make([]byte, 1024)
+
+	// Recibir datos del servidor intermediario
+	n, addr, err := conn.ReadFromUDP(buffer)
+	if err != nil {
+		fmt.Println("[OPPONENT] Error al recibir datos UDP:", err)
+		return
+	}
+	message := strings.TrimSpace(string(buffer[:n]))
+	fmt.Printf("[OPPONENT] Recibido: %s desde %v\n", message, addr)
+
+	if message == "Perdiste" || message == "Empate" || message == "Ganaste" {
+		fmt.Println("[OPPONENT] Fin del juego:", message)
+		return
+	}
+
+	// Simular un movimiento del oponente
+	row, col := simulateMove()
+	response := fmt.Sprintf("%d %d", row, col)
+
+	// Enviar movimiento al servidor intermediario
+	_, err = conn.WriteToUDP([]byte(response), addr)
+	if err != nil {
+		fmt.Println("[OPPONENT] Error al enviar respuesta UDP:", err)
+		return
+	}
+	fmt.Printf("[OPPONENT] Enviado movimiento: %s\n", response)
+}
+
+func simulateMove() (int, int) {
+	// Simulación básica de un movimiento del oponente
+	return 1, 1 // Ejemplo de movimiento en la posición (1,1)
 }
