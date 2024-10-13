@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"strings"
 	"time"
 )
 
@@ -28,22 +27,22 @@ func getComputerMove(board [3][3]string) (int, int) {
 }
 
 func main() {
-	listener, err := net.Listen("tcp", ":12346")
+	serverSocket, err := net.Listen("tcp", ":12346")
 	if err != nil {
 		fmt.Println("[OPPONENT] Error al iniciar el servidor:", err)
 		return
 	}
-	defer listener.Close()
+	defer serverSocket.Close()
 	fmt.Println("[OPPONENT] Servidor oponente escuchando en localhost:12346")
 
 	for {
-		conn, err := listener.Accept()
+		conn, err := serverSocket.Accept()
 		if err != nil {
 			fmt.Println("[OPPONENT] Error al aceptar conexión:", err)
 			continue
 		}
 		fmt.Printf("[OPPONENT] Conectado con %s\n", conn.RemoteAddr().String())
-		go handleConnection(conn)
+		handleConnection(conn)
 	}
 }
 
@@ -54,11 +53,12 @@ func handleConnection(conn net.Conn) {
 		boardStr := scanner.Text()
 		fmt.Printf("[OPPONENT] Recibido tablero: %s\n", boardStr)
 
-		if strings.TrimSpace(boardStr) == "exit" {
+		if boardStr == "exit" {
 			fmt.Println("[OPPONENT] El servidor intermediario ha cerrado la conexión")
 			break
 		}
 
+		// Convertir el tablero de JSON a una matriz de 3x3
 		var board [3][3]string
 		err := json.Unmarshal([]byte(boardStr), &board)
 		if err != nil {
@@ -68,11 +68,6 @@ func handleConnection(conn net.Conn) {
 
 		// Elige el movimiento de la computadora
 		row, col := getComputerMove(board)
-		if row == -1 && col == -1 {
-			fmt.Println("[OPPONENT] No hay movimientos disponibles")
-			continue
-		}
-
 		move := fmt.Sprintf("%d %d", row, col)
 		_, err = conn.Write([]byte(move + "\n"))
 		if err != nil {
