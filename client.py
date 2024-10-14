@@ -13,13 +13,13 @@ def get_player_move():
 def main():
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect(('localhost', 12345))  # Conéctate al servidor intermedio
-    print("[CLIENT] Conectado al servidor intermediario en localhost:12345")
+    #print("[CLIENT] Conectado al servidor intermediario en localhost:12345")
 
     while True:
         while True:
             # Recibe el estado del juego
             board = client_socket.recv(1024).decode().strip()
-            print(f"[CLIENT] Recibido del servidor: {board}")
+            #print(f"[CLIENT] Recibido del servidor: {board}")
 
             if board in ['Ganaste', 'Perdiste', 'Empate']:
                 print(board)
@@ -31,20 +31,20 @@ def main():
             # Elige el movimiento del jugador
             row, col = get_player_move()
             client_socket.send(f"{row} {col}".encode())
-            print(f"[CLIENT] Enviado movimiento: {row} {col}")
+            #print(f"[CLIENT] Enviado movimiento: {row} {col}")
 
         # Preguntar si desea jugar otra partida
         play_again = input("¿Quieres jugar otra partida? (s/n): ").strip().lower()
         if play_again == 's':
             client_socket.send("restart".encode())
-            print("[CLIENT] Enviado: restart")
+            #print("[CLIENT] Enviado: restart")
         else:
             client_socket.send("exit".encode())
-            print("[CLIENT] Enviado: exit")
+            #print("[CLIENT] Enviado: exit")
             break
 
     client_socket.close()
-    print("[CLIENT] Conexión cerrada")
+    #print("[CLIENT] Conexión cerrada")
 
 if __name__ == "__main__":
     main()
